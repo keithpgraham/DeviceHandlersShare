@@ -24,14 +24,15 @@ metadata {
 		fingerprint deviceId: "0x"
 		fingerprint deviceId: "0x3101"  // for z-wave certification, can remove these when sub-meters/window-coverings are supported
 		fingerprint deviceId: "0x3101", inClusters: "0x86,0x32"
-		fingerprint deviceId: "0x09", inClusters: "0x86,0x72,0x26"
-		fingerprint deviceId: "0x0805", inClusters: "0x47,0x86,0x72"
+		fingerprint deviceId: "0x09", inClusters: "0x86,0x72,0x26,0x5b"
+		fingerprint deviceId: "0x0805", inClusters: "0x47,0x86,0x72,0x5b"
 	}
 
-	simulator {
+/*	simulator {
 		status "on":  "command: 2003, payload: FF"
 		status "off": "command: 2003, payload: 00"
 	}
+*/
 
 	tiles {
 		standardTile("switch", "device.switch", width: 2, height: 2, canChangeIcon: true) {
@@ -44,15 +45,9 @@ metadata {
 		standardTile("switchOff", "device.switch", inactiveLabel: false, decoration: "flat") {
 			state "off", label:'off', action:"switch.off", icon:"st.switches.switch.off"
 		}
-		standardTile("refresh", "device.switch", inactiveLabel: false, decoration: "flat") {
-			state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
-		}
-		controlTile("levelSliderControl", "device.level", "slider", height: 1, width: 3, inactiveLabel: false) {
-			state "level", action:"switch level.setLevel"
-		}
 
 		main "switch"
-		details (["switch", "switchOn", "switchOff", "levelSliderControl", "refresh"])
+		details (["switch", "switchOn", "switchOff"])
 	}
 }
 
@@ -64,29 +59,61 @@ def parse(String description) {
 		def cmd = zwave.parse(description, [0x20: 1, 0x84: 1, 0x98: 1, 0x56: 1, 0x60: 3])
 		if (cmd) {
 			result += zwaveEvent(cmd)
+            //result = createEvent (descriptionText: description, isStateChange:true)
 		}
 	}
 	return result
 }
 
-def buttonEvent(button, held) {
+def buttonEvent(button, pushed) {
 	button = button as Integer
-	String childDni = "${device.deviceNetworkId}/${button}"
-	def child = childDevices.find{it.deviceNetworkId == childDni}
-	if (held) {
-		child?.sendEvent(name: "button", value: "held", data: [buttonNumber: 1], descriptionText: "$child.displayName was held", isStateChange: true)
-		createEvent(name: "button", value: "held", data: [buttonNumber: button], descriptionText: "$device.displayName button $button was held", isStateChange: true)
-		} else {
-		child?.sendEvent(name: "button", value: "pushed", data: [buttonNumber: 1], descriptionText: "$child.displayName was pushed", isStateChange: true)
+	//String childDni = "${device.deviceNetworkId}/${button}"
+	//def child = childDevices.find{it.deviceNetworkId == childDni}
+	//if (!child) {
+	//	log.error "Child device $childDni not found"
+	//}
+	if (pushed) {
+		//child?.sendEvent(name: "button", value: "held", data: [buttonNumber: 1], descriptionText: "$child.displayName was held", isStateChange: true)
+		createEvent(name: "button", value: "pushed", data: [buttonNumber: button], descriptionText:description, isStateChange: true)
+	} /*else {
+		//child?.sendEvent(name: "button", value: "pushed", data: [buttonNumber: 1], descriptionText: "$child.displayName was pushed", isStateChange: true)
 		createEvent(name: "button", value: "pushed", data: [buttonNumber: button], descriptionText: "$device.displayName button $button was pushed", isStateChange: true)
-		}
+	}*/
+    return button
 }
 
-def zwaveEvent(physicalgraph.zwave.commands.sceneactivationv1.SceneActivationSet cmd) {
-	Integer button = ((cmd.sceneId + 1) / 2) as Integer
-	Boolean held = !(cmd.sceneId % 2)
-	buttonEvent(button, held)
+/*def buttonEvent(pushed) {
+	if ($result == "case1") {
+		result = sendEvent(descriptionText1:"case1 was held", isStateChange: true)
+		result = createEvent(descriptionText: "This is a test", isStateChange: true)
+	}
+}*/
+
+def zwaveEvent(physicalgraph.zwave.commands.centralscenev1.CentralSceneNotification cmd) {
+	pushed = (cmd.sceneNumber == 1) as Integer
+	buttonEvent(pushed)
 }
+
+/*def eventHandler(physicalgraph.zwave.commands.centralscenev1.CentralSceneNotification cmd) {
+	def buttonPush = []
+    if (cmd.sceneNumber == 2) {
+		if (cmd.keyAttributes == 0) {
+		createEvent(value: "case 1", descriptionText: "case 1", isStateChange = true)
+        } else if (cmd.keyAttributes == 2) {
+          createEvent(value: 5)
+          } else (cmd.keyAttributes == 3) {
+          createEvent(value: 6)
+        }
+	} else if (cmd.sceneNumber == 1) {
+    	if (cmd.keyAttributes == 0) {
+		createEvent(value: 1)
+        } else if (cmd.keyAttributes == 2) {
+          createEvent(value: 2)
+          } else (cmd.keyAttributes == 3) {
+          createEvent(value: 3)
+        }
+	}
+}*/
 
 def installed() {
 	if (zwaveInfo.zw && zwaveInfo.zw.cc?.contains("84")) {
@@ -99,71 +126,45 @@ def zwaveEvent(physicalgraph.zwave.commands.wakeupv1.WakeUpNotification cmd) {
 	  response(zwave.wakeUpV1.wakeUpNoMoreInformation()) ]
 }
 
-def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd) {
-	if (cmd.value == 0) {
-		createEvent(name: "switch", value: "off")
-	} else if (cmd.value == 255) {
-		createEvent(name: "switch", value: "on")
-	} else {
-		[ createEvent(name: "switch", value: "on"), createEvent(name: "switchLevel", value: cmd.value) ]
-	}
-}
-
-def zwaveEvent(physicalgraph.zwave.commands.securityv1.SecurityMessageEncapsulation cmd) {
-	def encapsulatedCommand = cmd.encapsulatedCommand([0x20: 1, 0x84: 1])
-	if (encapsulatedCommand) {
-		state.sec = 1
-		def result = zwaveEvent(encapsulatedCommand)
-		result = result.collect {
-			if (it instanceof physicalgraph.device.HubAction && !it.toString().startsWith("9881")) {
-				response(cmd.CMD + "00" + it.toString())
-			} else {
-				it
-			}
-		}
-		result
-	}
-}
-
-def zwaveEvent(physicalgraph.zwave.commands.crc16encapv1.Crc16Encap cmd) {
-	def versions = [0x31: 2, 0x30: 1, 0x84: 1, 0x9C: 1, 0x70: 2]
-	// def encapsulatedCommand = cmd.encapsulatedCommand(versions)
-	def version = versions[cmd.commandClass as Integer]
-	def ccObj = version ? zwave.commandClass(cmd.commandClass, version) : zwave.commandClass(cmd.commandClass)
-	def encapsulatedCommand = ccObj?.command(cmd.command)?.parse(cmd.data)
-	if (encapsulatedCommand) {
-		zwaveEvent(encapsulatedCommand)
-	}
-}
-
 def zwaveEvent(physicalgraph.zwave.Command cmd) {
 	createEvent(descriptionText: "$device.displayName: $cmd", isStateChange: true)
 }
 
-def on() {
-	commands([zwave.basicV1.basicSet(value: 0xFF), zwave.basicV1.basicGet()])
-}
+/*def initialize() {
+	sendEvent(name: "numberOfButtons", value: 1)
+	sendEvent(name: "DeviceWatch-Enroll", value: JsonOutput.toJson([protocol: "zwave", scheme:"untracked"]), displayed: true)
+}*/
 
-def off() {
-	commands([zwave.basicV1.basicSet(value: 0x00), zwave.basicV1.basicGet()])
-}
+/*def installed() {
+	initialize()
+	createChildDevices()
+}*/
 
-def refresh() {
-	command(zwave.basicV1.basicGet())
-}
-
-def setLevel(value) {
-	commands([zwave.basicV1.basicSet(value: value as Integer), zwave.basicV1.basicGet()], 4000)
-}
-
-private command(physicalgraph.zwave.Command cmd) {
-	if (state.sec) {
-		zwave.securityV1.securityMessageEncapsulation().encapsulate(cmd).format()
-	} else {
-		cmd.format()
+def updated() {
+	initialize()
+	if (!childDevices) {
+		createChildDevices()
+	}
+	else if (device.label != state.oldLabel) {
+		childDevices.each {
+			def segs = it.deviceNetworkId.split("/")
+			def newLabel = "${device.displayName} button ${segs[-1]}"
+			it.setLabel(newLabel)
+		}
+		state.oldLabel = device.label
 	}
 }
 
-private commands(commands, delay=200) {
-	delayBetween(commands.collect{ command(it) }, delay)
+def initialize() {
+	sendEvent(name: "numberOfButtons", value: 6)
+	//sendEvent(name: "DeviceWatch-Enroll", value: JsonOutput.toJson([protocol: "zwave", scheme:"untracked"]), displayed: false)
 }
+
+/*private void createChildDevices() {
+	state.oldLabel = device.label
+	for (i in 1..4) {
+		addChildDevice("Child Button", "${device.deviceNetworkId}/${i}", null,
+				[completedSetup: true, label: "${device.displayName} button ${i}",
+				 isComponent: true, componentName: "button$i", componentLabel: "Button $i"])
+	}
+}*/
