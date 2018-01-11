@@ -20,6 +20,7 @@ metadata {
 		capability "Sensor"
         capability "Button"
         capability "Holdable Button"
+        capability "Battery"
 
 		fingerprint deviceId: "0x"
 		fingerprint deviceId: "0x3101"  // for z-wave certification, can remove these when sub-meters/window-coverings are supported
