@@ -61,23 +61,23 @@ def parse(String description) {
 
 def zwaveEvent(physicalgraph.zwave.commands.centralscenev1.CentralSceneNotification cmd) {
     Integer button   
-    if(reverse == true){
+    /*if(reverse == true){
     	if(cmd.sceneNumber == 1){
         	button = 2
         }else{
         	button = 1
         }
         log.debug button
-    }else{
-    	button = (cmd.sceneNumber) as Integer
-    }
+    }else{*/
+    	button = (cmd.keyAttributes) as Integer
+    //}
     	
 
-    if(cmd.keyAttributes == 0){
+    if(cmd.sceneNumber == 1){
 		createEvent(name: "button", value: "pushed", data: [buttonNumber: button], descriptionText: "$device.displayName button $button was pushed", isStateChange: true)
-    }else if(cmd.keyAttributes == 1){
+    /*}else if(cmd.keyAttributes == 1){
 		createEvent(name: "button", value: "held", data: [buttonNumber: button], descriptionText: "$device.displayName button $button was released", isStateChange: true)
-    }else if(cmd.keyAttributes == 2){
+    */}else if(cmd.sceneNumber == 2){
 		createEvent(name: "button", value: "held", data: [buttonNumber: button], descriptionText: "$device.displayName button $button was held", isStateChange: true)
     }      
 }
